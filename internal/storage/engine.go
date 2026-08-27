@@ -57,6 +57,7 @@ type Engine struct {
 	stop      chan struct{}
 	done      chan struct{}
 	closeOnce sync.Once
+	closeErr  error
 }
 
 // NewEngine opens persisted metadata, replays the WAL, and starts maintenance.
@@ -200,9 +201,14 @@ func (e *Engine) Status() Status {
 	}
 }
 
-// Close flushes all shards, persists metadata, clears the WAL, and stops workers.
+// Close flushes all shards, persists metadata, clears the WAL, and stops
+// workers. Each step that reports a failure is preserved in closeErr and
+// returned to the caller; nothing in this chain swallows an error. The chain
+// is ordered so a failing flush or metadata write skips the WAL truncation,
+// leaving the log intact for replay on the next start. Repeated calls are
+// safe and idempotent: the first call performs the work, and any later call
+// returns the same outcome the first call produced.
 func (e *Engine) Close() error {
-	var closeErr error
 	e.closeOnce.Do(func() {
 		e.ready.Store(false)
 		close(e.stop)
@@ -211,21 +217,25 @@ func (e *Engine) Close() error {
 		shards := append([]*Shard(nil), e.orderedShardsLocked()...)
 		e.mu.RUnlock()
 		for _, shard := range shards {
-			if err := shard.Flush(); err != nil && closeErr == nil {
-				closeErr = err
+			if err := shard.Flush(); err != nil && e.closeErr == nil {
+				e.closeErr = fmt.Errorf("flush shard %d: %w", shard.ID, err)
 			}
 		}
-		if closeErr == nil {
-			closeErr = e.saveMeta()
+		if e.closeErr == nil {
+			if err := e.saveMeta(); err != nil {
+				e.closeErr = err
+			}
 		}
-		if closeErr == nil {
-			closeErr = e.wal.Truncate()
+		if e.closeErr == nil {
+			if err := e.wal.Truncate(); err != nil {
+				e.closeErr = err
+			}
 		}
-		if err := e.wal.Close(); err != nil && closeErr == nil {
-			closeErr = err
+		if err := e.wal.Close(); err != nil && e.closeErr == nil {
+			e.closeErr = err
 		}
 	})
-	return closeErr
+	return e.closeErr
 }
 
 func (e *Engine) getOrCreateShard(start int64) *Shard {
@@ -349,22 +359,29 @@ func (e *Engine) loadMeta() error {
 	return nil
 }
 
-func (e *Engine) saveMeta() error {
+// saveMeta atomically writes the catalog. The named return is collected into
+// closeErr by the caller; swallowing it here would let Close report success
+// while metadata on disk is stale or missing, producing a corrupt recovery.
+func (e *Engine) saveMeta() (err error) {
 	meta := metaFile{Series: e.index.All()}
 	e.mu.RLock()
 	for _, shard := range e.orderedShardsLocked() {
 		meta.Shards = append(meta.Shards, metaShard{ID: shard.ID, Start: shard.Start, End: shard.End, State: shard.State, Segments: shard.SegmentPaths()})
 	}
 	e.mu.RUnlock()
-	raw, err := json.MarshalIndent(meta, "", "  ")
-	if err != nil {
-		return err
+	raw, marshalErr := json.MarshalIndent(meta, "", "  ")
+	if marshalErr != nil {
+		return fmt.Errorf("encode metadata: %w", marshalErr)
 	}
 	temporary := filepath.Join(e.cfg.DataDir, "meta.json.tmp")
-	if err := os.WriteFile(temporary, raw, 0o644); err != nil {
-		return err
+	if writeErr := os.WriteFile(temporary, raw, 0o644); writeErr != nil {
+		return fmt.Errorf("write metadata: %w", writeErr)
 	}
-	return os.Rename(temporary, filepath.Join(e.cfg.DataDir, "meta.json"))
+	if err := os.Rename(temporary, filepath.Join(e.cfg.DataDir, "meta.json")); err != nil {
+		_ = os.Remove(temporary)
+		return fmt.Errorf("publish metadata: %w", err)
+	}
+	return nil
 }
 
 func shardStart(timestamp, duration int64) int64 {

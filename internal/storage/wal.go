@@ -121,14 +121,19 @@ func (w *WAL) Replay(visit func(WALRecord) error) error {
 }
 
 // Truncate clears records after all active data has been flushed and catalogued.
+// It returns any error so the close path can decide whether shutdown truly
+// succeeded; a failed truncate leaves the WAL holding records that are already
+// persisted elsewhere and would otherwise be replayed again on restart.
 func (w *WAL) Truncate() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if err := w.file.Truncate(0); err != nil {
-		return err
+		return fmt.Errorf("truncate wal: %w", err)
 	}
-	_, err := w.file.Seek(0, io.SeekStart)
-	return err
+	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("seek wal: %w", err)
+	}
+	return nil
 }
 
 // Close releases the log file.

@@ -88,7 +88,9 @@ func (s *Shard) Flush() error {
 	return nil
 }
 
-// Close flushes the shard and makes it read-only.
+// Close flushes the shard and makes it read-only. The flush error is returned
+// rather than swallowed so a failed close stays visible: silently discarding it
+// would lose unflushed memtable points with no signal to the caller.
 func (s *Shard) Close() error {
 	if err := s.Flush(); err != nil {
 		return err
