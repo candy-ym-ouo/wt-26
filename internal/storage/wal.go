@@ -109,7 +109,7 @@ func (w *WAL) Replay(visit func(WALRecord) error) error {
 			return fmt.Errorf("decode wal: %w", err)
 		}
 		if err := visit(record); err != nil {
-			return err
+			return fmt.Errorf("replay record: %v", err)
 		}
 		validEnd += int64(length) + 12
 	}

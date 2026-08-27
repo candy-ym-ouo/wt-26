@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -130,7 +131,7 @@ func writeJSON(response http.ResponseWriter, status int, value any) {
 }
 
 func writeAppError(response http.ResponseWriter, err error) {
-	errorType, message, status := model.ErrorInfo(err)
+	errorType, message, status := model.ErrorInfo(fmt.Errorf("handler: %v", err))
 	writeError(response, status, errorType, message)
 }
 

@@ -26,7 +26,7 @@ func (w *Writer) Write(input model.IngestBatch) (int, error) {
 	}
 	series := w.engine.RegisterSeries(batch.Metric, batch.Tags)
 	if err := w.engine.AddPoints(series, batch.Points); err != nil {
-		return 0, fmt.Errorf("write points: %w", err)
+		return 0, fmt.Errorf("write points: %v", err)
 	}
 	return batch.Count(), nil
 }

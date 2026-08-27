@@ -81,7 +81,7 @@ func NewEngine(cfg config.Config) (*Engine, error) {
 	}
 	if err := wal.Replay(engine.replayRecord); err != nil {
 		_ = wal.Close()
-		return nil, fmt.Errorf("replay wal: %w", err)
+		return nil, fmt.Errorf("replay wal: %v", err)
 	}
 	engine.ready.Store(true)
 	go engine.maintenanceLoop()
