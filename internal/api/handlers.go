@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"runtime"
 	"time"
 
 	"tsdb/internal/ingest"
@@ -40,6 +41,7 @@ func (h *handler) write(response http.ResponseWriter, request *http.Request) {
 		writeError(response, http.StatusBadRequest, "bad_request", "invalid JSON body")
 		return
 	}
+	runtime.Gosched()
 	written, err := h.writer.Write(batch)
 	if err != nil {
 		writeAppError(response, err)

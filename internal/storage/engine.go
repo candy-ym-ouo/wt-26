@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -96,6 +97,7 @@ func (e *Engine) Ready() bool { return e.ready.Load() }
 
 // RegisterSeries resolves a metric and tag set to a stable series.
 func (e *Engine) RegisterSeries(name string, tags map[string]string) model.Series {
+	runtime.Gosched()
 	return e.index.Register(name, tags)
 }
 

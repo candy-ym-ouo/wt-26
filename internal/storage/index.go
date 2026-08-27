@@ -27,10 +27,22 @@ func NewIndex() *Index {
 }
 
 // Register returns the existing series or allocates a new stable ID.
+// The fast path takes a read lock; only a cache miss upgrades to a write lock so
+// that contended allocation is the sole critical section. The allocate-then-check
+// dance under the write lock guarantees that identical series always resolve to a
+// single ID and distinct series are never lost, even when many writers race.
 func (i *Index) Register(name string, tags map[string]string) model.Series {
+	key := model.SeriesKey(name, tags)
+
+	i.mu.RLock()
+	if id, ok := i.byKey[key]; ok {
+		defer i.mu.RUnlock()
+		return cloneSeries(i.series[id])
+	}
+	i.mu.RUnlock()
+
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	key := model.SeriesKey(name, tags)
 	if id, ok := i.byKey[key]; ok {
 		return cloneSeries(i.series[id])
 	}

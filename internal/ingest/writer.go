@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"fmt"
+	"runtime"
 
 	"tsdb/internal/model"
 	"tsdb/internal/storage"
@@ -24,6 +25,7 @@ func (w *Writer) Write(input model.IngestBatch) (int, error) {
 	if err := w.validator.Validate(batch); err != nil {
 		return 0, err
 	}
+	runtime.Gosched()
 	series := w.engine.RegisterSeries(batch.Metric, batch.Tags)
 	if err := w.engine.AddPoints(series, batch.Points); err != nil {
 		return 0, fmt.Errorf("write points: %w", err)
