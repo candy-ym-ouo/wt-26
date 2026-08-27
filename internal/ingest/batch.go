@@ -20,7 +20,7 @@ func FromModel(input model.IngestBatch) Batch {
 	return Batch{
 		Metric: input.Metric,
 		Tags:   model.CloneTags(input.Tags),
-		Points: append([]model.Point(nil), input.Points...),
+		Points: input.Points,
 	}
 }
 

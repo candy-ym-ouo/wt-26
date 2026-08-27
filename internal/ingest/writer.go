@@ -11,6 +11,7 @@ import (
 type Writer struct {
 	engine    *storage.Engine
 	validator Validator
+	scratch   []model.Point
 }
 
 // NewWriter creates a write service backed by an engine.
@@ -24,6 +25,8 @@ func (w *Writer) Write(input model.IngestBatch) (int, error) {
 	if err := w.validator.Validate(batch); err != nil {
 		return 0, err
 	}
+	w.scratch = append(w.scratch[:0], batch.Points...)
+	batch.Points = w.scratch
 	series := w.engine.RegisterSeries(batch.Metric, batch.Tags)
 	if err := w.engine.AddPoints(series, batch.Points); err != nil {
 		return 0, fmt.Errorf("write points: %w", err)

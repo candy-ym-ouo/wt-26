@@ -101,6 +101,7 @@ func (e *Engine) RegisterSeries(name string, tags map[string]string) model.Serie
 
 // AddPoints writes a validated series batch using WAL-before-memory ordering.
 func (e *Engine) AddPoints(series model.Series, points []model.Point) error {
+	points = model.SortPoints(points)
 	groups := make(map[int64][]model.Point)
 	for _, point := range points {
 		start := shardStart(point.Ts, e.cfg.ShardDuration.Milliseconds())
