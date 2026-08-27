@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"context"
 	"fmt"
 
 	"tsdb/internal/model"
@@ -20,6 +21,9 @@ func NewWriter(engine *storage.Engine) *Writer {
 
 // Write validates and persists an entire batch.
 func (w *Writer) Write(input model.IngestBatch) (int, error) {
+	if err := w.engine.RequestContextErr(); err != nil {
+		return 0, err
+	}
 	batch := FromModel(input)
 	if err := w.validator.Validate(batch); err != nil {
 		return 0, err
@@ -29,6 +33,11 @@ func (w *Writer) Write(input model.IngestBatch) (int, error) {
 		return 0, fmt.Errorf("write points: %w", err)
 	}
 	return batch.Count(), nil
+}
+
+func (w *Writer) WriteContext(ctx context.Context, input model.IngestBatch) (int, error) {
+	w.engine.SetRequestContext(ctx)
+	return w.Write(input)
 }
 
 // Validator exposes the configured validator for focused tests and diagnostics.

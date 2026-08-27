@@ -40,6 +40,7 @@ func (h *handler) write(response http.ResponseWriter, request *http.Request) {
 		writeError(response, http.StatusBadRequest, "bad_request", "invalid JSON body")
 		return
 	}
+	h.engine.SetRequestContext(request.Context())
 	written, err := h.writer.Write(batch)
 	if err != nil {
 		writeAppError(response, err)

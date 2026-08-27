@@ -28,6 +28,9 @@ func (e *Executor) Instant(request model.QueryReq, aggregate bool) model.VectorD
 func (e *Executor) collect(request model.QueryReq) ([]model.Series, map[uint64][]model.Point) {
 	series := e.engine.FindSeries(request.Metric, request.Tags, request.Limit)
 	data := make(map[uint64][]model.Point, len(series))
+	if e.engine.RequestContextErr() != nil {
+		return series, data
+	}
 	for _, item := range series {
 		points := e.engine.QueryPoints(item.ID, request.Start, request.End)
 		if len(points) > 0 {

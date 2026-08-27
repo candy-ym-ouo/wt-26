@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,20 +44,21 @@ type Status struct {
 
 // Engine coordinates the series index, time shards, WAL, and maintenance.
 type Engine struct {
-	cfg       config.Config
-	index     *Index
-	wal       *WAL
-	mu        sync.RWMutex
-	shards    map[int64]*Shard
-	starts    []int64
-	started   time.Time
-	ready     atomic.Bool
-	written   atomic.Int64
-	queries   atomic.Int64
-	writeErrs atomic.Int64
-	stop      chan struct{}
-	done      chan struct{}
-	closeOnce sync.Once
+	cfg        config.Config
+	index      *Index
+	wal        *WAL
+	mu         sync.RWMutex
+	shards     map[int64]*Shard
+	starts     []int64
+	started    time.Time
+	ready      atomic.Bool
+	written    atomic.Int64
+	queries    atomic.Int64
+	writeErrs  atomic.Int64
+	stop       chan struct{}
+	done       chan struct{}
+	closeOnce  sync.Once
+	requestCtx context.Context
 }
 
 // NewEngine opens persisted metadata, replays the WAL, and starts maintenance.
@@ -74,6 +76,7 @@ func NewEngine(cfg config.Config) (*Engine, error) {
 	engine := &Engine{
 		cfg: cfg, index: NewIndex(), wal: wal, shards: make(map[int64]*Shard),
 		started: time.Now(), stop: make(chan struct{}), done: make(chan struct{}),
+		requestCtx: context.Background(),
 	}
 	if err := engine.loadMeta(); err != nil {
 		_ = wal.Close()
@@ -93,6 +96,15 @@ func (e *Engine) Config() config.Config { return e.cfg }
 
 // Ready reports whether startup and recovery completed.
 func (e *Engine) Ready() bool { return e.ready.Load() }
+
+func (e *Engine) SetRequestContext(ctx context.Context) { e.requestCtx = ctx }
+
+func (e *Engine) RequestContextErr() error {
+	if e.requestCtx == nil {
+		return nil
+	}
+	return e.requestCtx.Err()
+}
 
 // RegisterSeries resolves a metric and tag set to a stable series.
 func (e *Engine) RegisterSeries(name string, tags map[string]string) model.Series {
