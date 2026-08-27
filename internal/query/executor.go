@@ -6,12 +6,19 @@ import (
 )
 
 // Executor resolves candidate series and gathers their shard data.
+//
+// It is intentionally stateless: every request resolves its own series set
+// from the engine, and the engine hands back defensively-copied label maps.
+// Nothing is cached across requests, so concurrent queries can never observe
+// or mutate each other's label sets.
 type Executor struct {
 	engine *storage.Engine
 }
 
 // NewExecutor creates a query service backed by an engine.
-func NewExecutor(engine *storage.Engine) *Executor { return &Executor{engine: engine} }
+func NewExecutor(engine *storage.Engine) *Executor {
+	return &Executor{engine: engine}
+}
 
 // Range executes a normalized range request.
 func (e *Executor) Range(request model.QueryReq) model.MatrixData {

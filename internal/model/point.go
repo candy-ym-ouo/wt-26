@@ -17,12 +17,17 @@ type Series struct {
 }
 
 // CloneTags returns a defensive copy suitable for crossing package boundaries.
+// Callers must never mutate a map obtained from storage, so this returns a
+// freshly allocated map that the caller may freely own and modify.
 func CloneTags(tags map[string]string) map[string]string {
-	copyTags := make(map[string]string, len(tags))
-	for key, value := range tags {
-		copyTags[key] = value
+	if tags == nil {
+		return nil
 	}
-	return copyTags
+	copied := make(map[string]string, len(tags))
+	for key, value := range tags {
+		copied[key] = value
+	}
+	return copied
 }
 
 // SortPoints orders points by timestamp and removes duplicates, keeping the last value.
