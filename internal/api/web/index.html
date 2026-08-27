@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TSDB 控制台</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header><h1>TSDB <small>轻量级时序数据库</small></h1></header>
+  <nav>
+    <button class="tab active" data-view="write">写入</button>
+    <button class="tab" data-view="query">查询</button>
+    <button class="tab" data-view="metrics">指标</button>
+    <button class="tab" data-view="status">状态</button>
+  </nav>
+  <main>
+    <div id="notice"></div>
+    <section id="write" class="view active">
+      <h2>生成并写入演示数据</h2>
+      <div class="grid">
+        <label>指标名<input id="w-metric" value="cpu.usage"></label>
+        <label>标签<input id="w-tags" value="host=web-01,region=tokyo"></label>
+        <label>起始时间<input id="w-start" type="datetime-local"></label>
+        <label>点数<input id="w-count" type="number" min="1" max="5000" value="100"></label>
+        <label>间隔 (ms)<input id="w-step" type="number" min="1" value="1000"></label>
+        <label>基准值<input id="w-base" type="number" step="any" value="50"></label>
+        <label>振幅<input id="w-amp" type="number" step="any" value="10"></label>
+      </div>
+      <button id="write-submit" class="primary">写入数据</button>
+    </section>
+    <section id="query" class="view">
+      <h2>区间查询</h2>
+      <div class="grid">
+        <label>指标名<input id="q-metric" value="cpu.usage"></label>
+        <label>标签过滤<input id="q-tags" placeholder="host=web-01"></label>
+        <label>开始<input id="q-start" type="datetime-local"></label>
+        <label>结束<input id="q-end" type="datetime-local"></label>
+        <label>步长<select id="q-step"><option value="0">原始点</option><option value="10000">10 秒</option><option value="60000">1 分钟</option><option value="300000">5 分钟</option><option value="3600000">1 小时</option></select></label>
+        <label>聚合<select id="q-agg"><option>avg</option><option>max</option><option>min</option><option>sum</option><option>count</option><option>last</option><option>p95</option></select></label>
+        <label>填充<select id="q-fill"><option>none</option><option>zero</option><option>prev</option></select></label>
+      </div>
+      <button id="query-submit" class="primary">查询</button>
+      <div id="legend"></div>
+      <canvas id="chart" height="360"></canvas>
+      <details><summary>查看数据表</summary><div id="data-table"></div></details>
+    </section>
+    <section id="metrics" class="view">
+      <h2>指标目录</h2>
+      <button id="metrics-refresh">刷新</button>
+      <div id="metrics-table"></div>
+    </section>
+    <section id="status" class="view">
+      <h2>系统状态</h2>
+      <div id="status-cards" class="cards"></div>
+      <pre id="status-json"></pre>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
