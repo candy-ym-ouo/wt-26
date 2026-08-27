@@ -188,7 +188,7 @@ func (e *Engine) Status() Status {
 	e.mu.RLock()
 	for _, shard := range e.shards {
 		counts["total"]++
-		counts[string(shard.State)]++
+		counts[string(shard.state())]++
 		memory += shard.MemoryPoints()
 	}
 	e.mu.RUnlock()
@@ -228,13 +228,14 @@ func (e *Engine) Close() error {
 	return closeErr
 }
 
+// getOrCreateShard returns the shard covering start, creating it on first use.
+// An existing shard is returned unchanged: its persisted lifecycle stage is
+// never reset to active by a late write. Only freshly created shards begin in
+// the active stage.
 func (e *Engine) getOrCreateShard(start int64) *Shard {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if shard := e.shards[start]; shard != nil {
-		if shard.State != ShardActive {
-			shard.Activate()
-		}
 		return shard
 	}
 	end := start + e.cfg.ShardDuration.Milliseconds()
@@ -245,6 +246,10 @@ func (e *Engine) getOrCreateShard(start int64) *Shard {
 	return shard
 }
 
+// replayRecord restores a series and buffers its points into the covering
+// shard. The shard's lifecycle stage comes from the persisted metadata (or is
+// active for a brand-new shard), so the record never carries or applies a
+// stage — that kept the disk lifecycle and the WAL out of sync.
 func (e *Engine) replayRecord(record WALRecord) error {
 	e.index.Restore(record.Series)
 	shard := e.getOrCreateShard(int64(record.ShardID))
@@ -269,10 +274,22 @@ func (e *Engine) maintain(now int64) {
 	shards := append([]*Shard(nil), e.orderedShardsLocked()...)
 	e.mu.RUnlock()
 	for _, shard := range shards {
+		// Persist any pending memtable first so late writes targeting an
+		// already-finished window become durable without touching the stage.
+		_ = shard.Flush()
+		// The lifecycle advances strictly forward in stage order. Stages are
+		// never reset by a write, so re-running this loop (or restarting)
+		// converges to the same on-disk state.
 		if shard.State == ShardActive && shard.End <= now {
-			_ = shard.Close()
+			shard.advanceState(ShardClosed)
 		}
 		if shard.State == ShardClosed {
+			// Merge segments; with fewer than two it is a no-op that leaves the
+			// shard closed, otherwise the stage advances to compacted.
+			_ = Compact(shard)
+		}
+		if shard.State == ShardCompacted && shard.segmentCount() >= 2 {
+			// Re-merge segments accumulated by later late writes.
 			_ = Compact(shard)
 		}
 		if shard.State == ShardCompacted && shard.End < now-e.cfg.Retention.Milliseconds()/2 {
@@ -334,7 +351,7 @@ func (e *Engine) loadMeta() error {
 	}
 	for _, saved := range meta.Shards {
 		shard := NewShard(saved.ID, saved.Start, saved.End, filepath.Join(e.cfg.DataDir, fmt.Sprintf("shard-%d", saved.Start)))
-		shard.State = saved.State
+		shard.State = restoredShardState(saved.State)
 		for _, name := range saved.Segments {
 			segment, err := OpenSegment(filepath.Join(shard.Dir, name))
 			if err != nil {
@@ -349,11 +366,23 @@ func (e *Engine) loadMeta() error {
 	return nil
 }
 
+// restoredShardState keeps a persisted lifecycle stage, falling back to active
+// only when metadata is missing or unknown. This is what makes the on-disk
+// lifecycle authoritative across restarts.
+func restoredShardState(saved ShardState) ShardState {
+	switch saved {
+	case ShardActive, ShardClosed, ShardCompacted, ShardDownsampled:
+		return saved
+	default:
+		return ShardActive
+	}
+}
+
 func (e *Engine) saveMeta() error {
 	meta := metaFile{Series: e.index.All()}
 	e.mu.RLock()
 	for _, shard := range e.orderedShardsLocked() {
-		meta.Shards = append(meta.Shards, metaShard{ID: shard.ID, Start: shard.Start, End: shard.End, State: shard.State, Segments: shard.SegmentPaths()})
+		meta.Shards = append(meta.Shards, metaShard{ID: shard.ID, Start: shard.Start, End: shard.End, State: shard.state(), Segments: shard.SegmentPaths()})
 	}
 	e.mu.RUnlock()
 	raw, err := json.MarshalIndent(meta, "", "  ")

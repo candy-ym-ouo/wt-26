@@ -18,8 +18,16 @@ import (
 var walMagic = [4]byte{'W', 'A', 'L', '1'}
 
 // WALRecord contains enough metadata to restore an index after a crash.
+//
+// The shard lifecycle stage is not carried by WAL records: it is the
+// authority of the on-disk metadata, and replay only restores points into the
+// covering shard. Carrying the write-time stage here previously let a late
+// write's "active" stamp overwrite a persisted "closed"/"compacted" stage on
+// replay, breaking the lifecycle across restart. The State field is retained
+// for decoding older log files but is no longer written or applied.
 type WALRecord struct {
 	ShardID uint64        `json:"shard"`
+	State   ShardState    `json:"state,omitempty"`
 	Series  model.Series  `json:"series"`
 	Points  []model.Point `json:"points"`
 }

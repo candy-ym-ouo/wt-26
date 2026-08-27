@@ -37,13 +37,17 @@ func NewShard(id uint64, start, end int64, dir string) *Shard {
 	return &Shard{ID: id, Start: start, End: end, State: ShardActive, Dir: dir, mem: NewMemtable(), nextSeg: 1}
 }
 
-// Insert writes points into an active shard.
+// Insert buffers points into the shard memtable.
+//
+// Writability is decoupled from the lifecycle stage: a late write targets an
+// already-closed (or compacted/downsampled) window and lands in the pending
+// memtable, where maintenance will later flush it as a new segment. The stage
+// itself is never reset by a write, so the persisted lifecycle survives both
+// concurrent maintenance and restart. This closes the time-of-check/time-of-use
+// window that previously surfaced as "shard is not active".
 func (s *Shard) Insert(seriesID uint64, points []model.Point) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.State != ShardActive {
-		return fmt.Errorf("shard %d is not active", s.ID)
-	}
 	s.mem.InsertBatch(seriesID, points)
 	return nil
 }
@@ -99,14 +103,18 @@ func (s *Shard) Close() error {
 	return nil
 }
 
-// Activate reopens a restored window when an accepted late write targets it.
-func (s *Shard) Activate() {
+// advanceState moves the lifecycle stage forward. It never touches the memtable
+// or segments, so maintenance can close a window after a flush without the
+// two-step Flush+Close reentrancy.
+func (s *Shard) advanceState(state ShardState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.State = ShardActive
+	s.State = state
 }
 
-// AddSegment installs a segment restored from metadata.
+// AddSegment installs a segment restored from metadata. It advances the next
+// free sequence number but never changes the shard's lifecycle stage; the
+// stage is owned by the engine and persists across restarts.
 func (s *Shard) AddSegment(segment *Segment) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,6 +134,20 @@ func (s *Shard) SegmentPaths() []string {
 		paths = append(paths, filepath.Base(segment.Path))
 	}
 	return paths
+}
+
+// state returns the current lifecycle stage under the shard lock.
+func (s *Shard) state() ShardState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.State
+}
+
+// segmentCount returns the number of persisted segments under the shard lock.
+func (s *Shard) segmentCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.segments)
 }
 
 // PointCount calculates unique logical points across all sources.

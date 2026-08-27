@@ -8,14 +8,14 @@ import (
 	"tsdb/internal/model"
 )
 
-// Compact rewrites overlapping segments into one deduplicated segment.
+// Compact rewrites overlapping segments into one deduplicated segment and
+// advances the shard to the compacted stage. A shard with fewer than two
+// segments has nothing to compact; its stage is left untouched so a window
+// that maintenance already closed stays closed across ticks and restarts.
 func Compact(shard *Shard) error {
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 	if len(shard.segments) < 2 {
-		if shard.State == ShardClosed {
-			shard.State = ShardCompacted
-		}
 		return nil
 	}
 	merged := make(map[uint64]map[int64]float64)
