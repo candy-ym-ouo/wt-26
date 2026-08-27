@@ -52,6 +52,9 @@ func (s *Shard) Insert(seriesID uint64, points []model.Point) error {
 func (s *Shard) Read(seriesID uint64, start, end int64) []model.Point {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if len(s.segments) == 0 {
+		return s.mem.Read(seriesID, start, end)
+	}
 	byTime := make(map[int64]model.Point)
 	for _, segment := range s.segments {
 		for _, point := range segment.ReadSeries(seriesID, start, end) {

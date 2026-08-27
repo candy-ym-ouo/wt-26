@@ -111,8 +111,10 @@ func OpenSegment(path string) (*Segment, error) {
 }
 
 // ReadSeries returns segment points within an inclusive interval.
+// The returned slice is a defensive copy so callers cannot mutate the
+// segment's in-memory data through it.
 func (s *Segment) ReadSeries(id uint64, start, end int64) []model.Point {
-	return model.FilterPoints(s.Data[id], start, end)
+	return model.CopyPoints(model.FilterPoints(s.Data[id], start, end))
 }
 
 // PointCount reports the number of entries in this segment.

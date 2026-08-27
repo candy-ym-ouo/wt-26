@@ -26,6 +26,8 @@ func CloneTags(tags map[string]string) map[string]string {
 }
 
 // SortPoints orders points by timestamp and removes duplicates, keeping the last value.
+// It may reorder the input slice in place; callers that need to preserve the input
+// must pass a copy. The returned slice shares storage with the input.
 func SortPoints(points []Point) []Point {
 	if len(points) < 2 {
 		return points
@@ -43,10 +45,22 @@ func SortPoints(points []Point) []Point {
 }
 
 // FilterPoints returns points in the inclusive interval.
+// The returned slice shares the backing array of the input; use CopyPoints when
+// the result must not be observable through the original slice.
 func FilterPoints(points []Point, start, end int64) []Point {
 	left := sort.Search(len(points), func(i int) bool { return points[i].Ts >= start })
 	right := sort.Search(len(points), func(i int) bool { return points[i].Ts > end })
-	result := make([]Point, right-left)
-	copy(result, points[left:right])
-	return result
+	return points[left:right]
+}
+
+// CopyPoints returns an independent slice that does not alias the input's backing
+// array, so reordering or appending to the copy leaves the original untouched.
+// It returns a non-nil slice for non-nil input.
+func CopyPoints(points []Point) []Point {
+	if points == nil {
+		return nil
+	}
+	out := make([]Point, len(points))
+	copy(out, points)
+	return out
 }

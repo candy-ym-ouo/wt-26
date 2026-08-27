@@ -34,16 +34,12 @@ func Aggregate(name string, points []model.Point) (float64, bool) {
 	case "last":
 		return points[len(points)-1].Value, true
 	case "p95":
-		values := make([]float64, len(points))
-		for index, point := range points {
-			values[index] = point.Value
-		}
-		sort.Float64s(values)
-		position := int(math.Ceil(float64(len(values))*0.95)) - 1
+		sort.Slice(points, func(i, j int) bool { return points[i].Value < points[j].Value })
+		position := int(math.Ceil(float64(len(points))*0.95)) - 1
 		if position < 0 {
 			position = 0
 		}
-		return values[position], true
+		return points[position].Value, true
 	default:
 		return 0, false
 	}

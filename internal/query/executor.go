@@ -30,6 +30,9 @@ func (e *Executor) collect(request model.QueryReq) ([]model.Series, map[uint64][
 	data := make(map[uint64][]model.Point, len(series))
 	for _, item := range series {
 		points := e.engine.QueryPoints(item.ID, request.Start, request.End)
+		// QueryPoints returns slices that never alias in-process storage, so
+		// they are safe to hand to aggregation/matrix builders that sort or
+		// reorder them in place.
 		if len(points) > 0 {
 			data[item.ID] = points
 		}

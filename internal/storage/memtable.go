@@ -47,10 +47,12 @@ func (m *Memtable) InsertBatch(seriesID uint64, points []model.Point) {
 }
 
 // Read returns a defensive copy of points inside the inclusive interval.
+// The returned slice never aliases the memtable's backing array, so callers may
+// reorder or append to it without corrupting in-memory storage state.
 func (m *Memtable) Read(seriesID uint64, start, end int64) []model.Point {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return model.FilterPoints(m.points[seriesID], start, end)
+	return model.CopyPoints(model.FilterPoints(m.points[seriesID], start, end))
 }
 
 // Snapshot creates an independent copy of all series and their points.
