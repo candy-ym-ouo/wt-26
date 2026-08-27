@@ -74,4 +74,6 @@ func (s *Server) Handler() http.Handler { return s.router }
 func (s *Server) ListenAndServe() error { return s.http.ListenAndServe() }
 
 // Shutdown gracefully stops the HTTP listener.
-func (s *Server) Shutdown(ctx context.Context) error { return s.http.Shutdown(ctx) }
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.http.Shutdown(ctx)
+}
