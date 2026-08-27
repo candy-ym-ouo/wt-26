@@ -18,6 +18,9 @@ type Series struct {
 
 // CloneTags returns a defensive copy suitable for crossing package boundaries.
 func CloneTags(tags map[string]string) map[string]string {
+	if tags == nil {
+		return nil
+	}
 	copyTags := make(map[string]string, len(tags))
 	for key, value := range tags {
 		copyTags[key] = value

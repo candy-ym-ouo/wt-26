@@ -14,7 +14,8 @@ func BuildMatrix(series []model.Series, data map[uint64][]model.Point, request m
 		for index, point := range points {
 			values[index] = model.Sample{Ts: point.Ts, Value: point.Value}
 		}
-		result.Result = append(result.Result, model.MatrixSeries{Metric: model.Labels(item), Values: values})
+		labels := model.Labels(item)
+		result.Result = append(result.Result, model.MatrixSeries{Metric: labels, Values: values})
 	}
 	return result
 }
@@ -35,8 +36,9 @@ func BuildVector(series []model.Series, data map[uint64][]model.Point, request m
 			}
 			point = model.Point{Ts: request.End, Value: value}
 		}
+		labels := model.Labels(item)
 		result.Result = append(result.Result, model.VectorSeries{
-			Metric: model.Labels(item),
+			Metric: labels,
 			Value:  model.Sample{Ts: point.Ts, Value: point.Value},
 		})
 	}

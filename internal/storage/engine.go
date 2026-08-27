@@ -330,6 +330,7 @@ func (e *Engine) loadMeta() error {
 		return fmt.Errorf("decode metadata: %w", err)
 	}
 	for _, series := range meta.Series {
+		series.Tags = model.CloneTags(series.Tags)
 		e.index.Restore(series)
 	}
 	for _, saved := range meta.Shards {

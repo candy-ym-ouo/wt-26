@@ -34,7 +34,7 @@ func (i *Index) Register(name string, tags map[string]string) model.Series {
 	if id, ok := i.byKey[key]; ok {
 		return cloneSeries(i.series[id])
 	}
-	series := model.Series{ID: i.nextID, Name: name, Tags: model.CloneTags(tags)}
+	series := model.Series{ID: i.nextID, Name: name, Tags: tags}
 	i.nextID++
 	i.addLocked(series)
 	return cloneSeries(series)
